@@ -96,8 +96,9 @@ module OmniCat
                   "Document is not found in #{category_name} documents!"
           end
           doc.tokens.each do |token, count|
-            decrement_token_counts(category_name, token, count)
             @categories[category_name].tokens[token] = @categories[category_name].tokens[token].to_i - count
+            @categories[category_name].tokens.delete(token) if @categories[category_name].tokens[token] == 0
+            decrement_token_counts(category_name, token, count)
           end
           @categories[category_name].docs.delete(doc_key) if @categories[category_name].docs[doc_key].count == 0
           decrement_doc_counts(category_name)
@@ -180,7 +181,7 @@ module OmniCat
 
         # nodoc
         def modify_uniq_token_count(token, uniq_token_addition)
-          categories.each do |_, category|
+          @categories.each do |_, category|
              if category.tokens.has_key?(token)
                uniq_token_addition = 0
                break

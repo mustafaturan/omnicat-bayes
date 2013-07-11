@@ -128,6 +128,16 @@ class TestBayes < Test::Unit::TestCase
   def test_train_missing_category
     assert_raise(StandardError) { @bayes.train 'neutral', 'how are you?' }
   end
+  
+  def test_unique_token_count
+    @bayes.add_category 'positive'
+    @bayes.train_batch 'positive', ['good job ever', 'valid syntax',
+      'best moments of my good life']
+    assert_equal(10,@bayes.uniq_token_count)
+    @bayes.untrain_batch 'positive', ['good job ever', 'valid syntax',
+      'best moments of my good life']
+    assert_equal(0,@bayes.uniq_token_count)
+  end
 
   def test_classifiability_error
     @bayes.add_category 'positive'
