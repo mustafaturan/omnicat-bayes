@@ -65,6 +65,56 @@ class TestBayes < Test::Unit::TestCase
     )
   end
 
+  def test_untrain_valid_category
+    @bayes.add_category 'neutral'
+    @bayes.train 'neutral', 'how are you?? : :| :) ;-) :('
+    @bayes.untrain 'neutral', 'how are you?? : :| :) ;-) :('
+    assert_equal(
+      0,
+      @bayes.categories['neutral'].doc_count
+    )
+    assert_equal(
+      0,
+      @bayes.categories['neutral'].docs.count
+    )
+    assert_equal(
+      0,
+      @bayes.categories['neutral'].token_count
+    )
+  end
+  
+  def test_untrain_with_doc_count_2
+    @bayes.add_category 'neutral'
+    @bayes.train 'neutral', 'how are you?? : :| :) ;-) :('
+    @bayes.train 'neutral', 'how are you?? : :| :) ;-) :('
+    @bayes.untrain 'neutral', 'how are you?? : :| :) ;-) :('
+    assert_equal(
+      1,
+      @bayes.categories['neutral'].doc_count
+    )
+    assert_equal(
+      {'how' => 1, 'you' => 1, '?' => 2, ':|' => 1, ':)' => 1, ';-)' => 1, ':(' => 1},
+      @bayes.categories['neutral'].tokens
+    )
+    assert_equal(
+      8,
+      @bayes.categories['neutral'].token_count
+    )
+  end
+
+  def test_untrain_invalid_category
+    assert_equal(false, @bayes.categories.has_key?('neutral'))
+    assert_raise(StandardError) {
+      @bayes.untrain 'neutral', 'how are you?? : :| :) ;-) :('
+    }
+  end
+
+  def test_untrain_with_missing_doc
+    @bayes.add_category 'neutral'
+    assert_raise(StandardError) {
+      @bayes.untrain 'neutral', 'how are you?? : :| :) ;-) :(' }
+  end
+
   def test_train_batch
     @bayes.add_category 'positive'
     @bayes.train_batch 'positive', ['good job ever', 'valid syntax',

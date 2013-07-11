@@ -1,3 +1,4 @@
+require 'digest'
 require 'omnicat/classifiers/strategy'
 
 module OmniCat
@@ -54,11 +55,53 @@ module OmniCat
         if category_exists?(category_name)
           increment_doc_counts(category_name)
           update_priors
-          doc = OmniCat::Doc.new(content: doc_content)
+          doc_key = Digest::MD5.hexdigest(doc_content)
+          if doc = @categories[category_name].docs[doc_key]
+            doc.increment_count
+          else
+            doc = OmniCat::Doc.new(content: doc_content)
+          end
+          @categories[category_name].docs[doc_key] = doc
           doc.tokens.each do |token, count|
             increment_token_counts(category_name, token, count)
             @categories[category_name].tokens[token] = @categories[category_name].tokens[token].to_i + count
           end
+        else
+          raise StandardError,
+                "Category with name '#{category_name}' does not exist!"
+        end
+      end
+
+      # Untrain the desired category with a document
+      #
+      # ==== Parameters
+      #
+      # * +category_name+ - Name of the category from added categories list
+      # * +doc_content+ - Document text
+      #
+      # ==== Examples
+      #
+      #   # Untrain the desired category
+      #   bayes.untrain("positive", "clear documentation")
+      #   bayes.untrain("positive", "good, very well")
+      #   bayes.untrain("negative", "bad dog")
+      #   bayes.untrain("neutral", "how is the management gui")
+      def untrain(category_name, doc_content)
+        if category_exists?(category_name)
+          doc_key = Digest::MD5.hexdigest(doc_content)
+          if doc = @categories[category_name].docs[doc_key]
+            @categories[category_name].docs[doc_key].decrement_count
+          else
+            raise StandardError,
+                  "Document is not found in #{category_name} documents!"
+          end
+          doc.tokens.each do |token, count|
+            decrement_token_counts(category_name, token, count)
+            @categories[category_name].tokens[token] = @categories[category_name].tokens[token].to_i - count
+          end
+          @categories[category_name].docs.delete(doc_key) if @categories[category_name].docs[doc_key].count == 0
+          decrement_doc_counts(category_name)
+          update_priors
         else
           raise StandardError,
                 "Category with name '#{category_name}' does not exist!"
@@ -110,14 +153,33 @@ module OmniCat
 
         # nodoc
         def increment_token_counts(category_name, token, count)
-          increment_uniq_token_count(token)
+          modify_token_counts(category_name, token, count)
+        end
+
+        # nodoc
+        def decrement_token_counts(category_name, token, count)
+          modify_token_counts(category_name, token, -1 * count)
+        end
+
+        # nodoc
+        def modify_token_counts(category_name, token, count)
+          modify_uniq_token_count(token, count < 0 ? -1 : 1)
           @token_count += count
           @categories[category_name].token_count += count
         end
 
         # nodoc
         def increment_uniq_token_count(token)
-          uniq_token_addition = 1
+          modify_uniq_token_count(token, 1)
+        end
+
+        # nodoc
+        def decrement_uniq_token_count(token)
+          modify_uniq_token_count(token, -1)
+        end
+
+        # nodoc
+        def modify_uniq_token_count(token, uniq_token_addition)
           categories.each do |_, category|
              if category.tokens.has_key?(token)
                uniq_token_addition = 0
