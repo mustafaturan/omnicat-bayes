@@ -53,19 +53,13 @@ module OmniCat
       #   bayes.train("neutral", "how is the management gui")
       def train(category_name, doc_content)
         if category_exists?(category_name)
-          increment_doc_counts(category_name)
-          update_priors
-          doc_key = Digest::MD5.hexdigest(doc_content)
-          if doc = @categories[category_name].docs[doc_key]
-            doc.increment_count
-          else
-            doc = OmniCat::Doc.new(content: doc_content)
-          end
-          @categories[category_name].docs[doc_key] = doc
+          doc = add_doc(category_name, doc_content)
           doc.tokens.each do |token, count|
             increment_token_counts(category_name, token, count)
             @categories[category_name].tokens[token] = @categories[category_name].tokens[token].to_i + count
           end
+          increment_doc_counts(category_name)
+          update_priors
         else
           raise StandardError,
                 "Category with name '#{category_name}' does not exist!"
@@ -88,19 +82,12 @@ module OmniCat
       #   bayes.untrain("neutral", "how is the management gui")
       def untrain(category_name, doc_content)
         if category_exists?(category_name)
-          doc_key = Digest::MD5.hexdigest(doc_content)
-          if doc = @categories[category_name].docs[doc_key]
-            @categories[category_name].docs[doc_key].decrement_count
-          else
-            raise StandardError,
-                  "Document is not found in #{category_name} documents!"
-          end
+          doc = remove_doc(category_name, doc_content)
           doc.tokens.each do |token, count|
             @categories[category_name].tokens[token] = @categories[category_name].tokens[token].to_i - count
             @categories[category_name].tokens.delete(token) if @categories[category_name].tokens[token] == 0
             decrement_token_counts(category_name, token, count)
           end
-          @categories[category_name].docs.delete(doc_key) if @categories[category_name].docs[doc_key].count == 0
           decrement_doc_counts(category_name)
           update_priors
         else
@@ -210,6 +197,37 @@ module OmniCat
               (category.token_count + uniq_token_count)
             )
           end
+        end
+
+        # nodoc
+        def add_doc(category_name, doc_content)
+          doc_key = generate_doc_key(doc_content)
+          if @categories[category_name].docs[doc_key]
+            @categories[category_name].docs[doc_key].increment_count
+          else
+            @categories[category_name].docs[doc_key] = OmniCat::Doc.new(content: doc_content)
+          end
+          @categories[category_name].docs[doc_key]
+        end
+
+        # nodoc
+        def remove_doc(category_name, doc_content)
+          doc_key = generate_doc_key(doc_content)
+          if doc = @categories[category_name].docs[doc_key]
+            @categories[category_name].docs[doc_key].decrement_count
+            if @categories[category_name].docs[doc_key].count == 0
+              @categories[category_name].docs.delete(doc_key)
+            end
+          else
+            raise StandardError,
+                  "Document is not found in #{category_name} documents!"
+          end
+          doc
+        end
+
+        # nodoc
+        def generate_doc_key(doc_content)
+          Digest::MD5.hexdigest(doc_content)
         end
     end
   end
