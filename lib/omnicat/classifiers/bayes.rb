@@ -52,18 +52,14 @@ module OmniCat
       #   bayes.train("negative", "bad dog")
       #   bayes.train("neutral", "how is the management gui")
       def train(category_name, doc_content)
-        if category_exists?(category_name)
-          doc = add_doc(category_name, doc_content)
-          doc.tokens.each do |token, count|
-            increment_token_counts(category_name, token, count)
-            @categories[category_name].tokens[token] = @categories[category_name].tokens[token].to_i + count
-          end
-          increment_doc_counts(category_name)
-          update_priors
-        else
-          raise StandardError,
-                "Category with name '#{category_name}' does not exist!"
+        category_must_exist(category_name)
+        doc = add_doc(category_name, doc_content)
+        doc.tokens.each do |token, count|
+          increment_token_counts(category_name, token, count)
+          @categories[category_name].tokens[token] = @categories[category_name].tokens[token].to_i + count
         end
+        increment_doc_counts(category_name)
+        update_priors
       end
 
       # Untrain the desired category with a document
@@ -81,19 +77,15 @@ module OmniCat
       #   bayes.untrain("negative", "bad dog")
       #   bayes.untrain("neutral", "how is the management gui")
       def untrain(category_name, doc_content)
-        if category_exists?(category_name)
-          doc = remove_doc(category_name, doc_content)
-          doc.tokens.each do |token, count|
-            @categories[category_name].tokens[token] = @categories[category_name].tokens[token].to_i - count
-            @categories[category_name].tokens.delete(token) if @categories[category_name].tokens[token] == 0
-            decrement_token_counts(category_name, token, count)
-          end
-          decrement_doc_counts(category_name)
-          update_priors
-        else
-          raise StandardError,
-                "Category with name '#{category_name}' does not exist!"
+        category_must_exist(category_name)
+        doc = remove_doc(category_name, doc_content)
+        doc.tokens.each do |token, count|
+          @categories[category_name].tokens[token] = @categories[category_name].tokens[token].to_i - count
+          @categories[category_name].tokens.delete(token) if @categories[category_name].tokens[token] == 0
+          decrement_token_counts(category_name, token, count)
         end
+        decrement_doc_counts(category_name)
+        update_priors
       end
 
       # Classify the given document
@@ -228,6 +220,14 @@ module OmniCat
         # nodoc
         def generate_doc_key(doc_content)
           Digest::MD5.hexdigest(doc_content)
+        end
+
+        # nodoc
+        def category_must_exist(category_name)
+          unless category_exists?(category_name)
+            raise StandardError,
+                  "Category with name '#{category_name}' does not exist!"
+          end
         end
     end
   end
