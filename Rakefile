@@ -9,7 +9,7 @@ task :default => [ :test ]
 desc "Run all unit tests"
 Rake::TestTask.new do |t|
   t.libs << 'lib'
-  t.test_files = FileList['lib/test/unit/*_test.rb']
+  t.test_files = FileList['test/unit/*_test.rb']
   t.verbose = true
 end
 

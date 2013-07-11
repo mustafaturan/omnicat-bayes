@@ -57,6 +57,12 @@ Train category with a document.
 
     bayes.train('positive', 'great if you are in a slap happy mood .')
     bayes.train('negative', 'bad tracking issue')
+    
+### Untrain
+Untrain category with a document.
+
+    bayes.untrain('positive', 'great if you are in a slap happy mood .')
+    bayes.untrain('negative', 'bad tracking issue')
 
 ### Train batch
 Train category with multiple documents.
@@ -67,6 +73,20 @@ Train category with multiple documents.
       'love and money both of them are good choises'
     ])
     bayes.train_batch('negative', [
+      'simplistic , silly and tedious .',
+      'interesting , but not compelling . ',
+      'seems clever but not especially compelling'
+    ])
+    
+### Untrain batch
+Untrain category with multiple documents.
+
+    bayes.untrain_batch('positive', [
+      'a feel-good picture in the best sense of the term...',
+      'it is a feel-good movie about which you can actually feel good.',
+      'love and money both of them are good choises'
+    ])
+    bayes.untrain_batch('negative', [
       'simplistic , silly and tedious .',
       'interesting , but not compelling . ',
       'seems clever but not especially compelling'
