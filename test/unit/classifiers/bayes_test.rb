@@ -4,6 +4,7 @@ require File.expand_path(File.join(File.dirname(__FILE__), '..', '..', 'test_hel
 class TestBayes < Test::Unit::TestCase
   def setup
     OmniCat.configure do |config|
+      config.auto_train = :off
       config.exclude_tokens = ['are', 'at', 'by']
       config.token_patterns = {
         minus: [/[\s\t\n\r]+/, /(@[\w\d]+)/],
@@ -82,7 +83,7 @@ class TestBayes < Test::Unit::TestCase
       @bayes.categories['neutral'].token_count
     )
   end
-  
+
   def test_untrain_with_doc_count_2
     @bayes.add_category 'neutral'
     @bayes.train 'neutral', 'how are you?? : :| :) ;-) :('
@@ -112,7 +113,8 @@ class TestBayes < Test::Unit::TestCase
   def test_untrain_with_missing_doc
     @bayes.add_category 'neutral'
     assert_raise(StandardError) {
-      @bayes.untrain 'neutral', 'how are you?? : :| :) ;-) :(' }
+      @bayes.untrain 'neutral', 'how are you?? : :| :) ;-) :('
+    }
   end
 
   def test_train_batch
@@ -128,15 +130,15 @@ class TestBayes < Test::Unit::TestCase
   def test_train_missing_category
     assert_raise(StandardError) { @bayes.train 'neutral', 'how are you?' }
   end
-  
+
   def test_unique_token_count
     @bayes.add_category 'positive'
     @bayes.train_batch 'positive', ['good job ever', 'valid syntax',
       'best moments of my good life']
-    assert_equal(10,@bayes.uniq_token_count)
+    assert_equal(10,@bayes.unique_token_count)
     @bayes.untrain_batch 'positive', ['good job ever', 'valid syntax',
       'best moments of my good life']
-    assert_equal(0,@bayes.uniq_token_count)
+    assert_equal(0,@bayes.unique_token_count)
   end
 
   def test_classifiability_error
@@ -154,11 +156,12 @@ class TestBayes < Test::Unit::TestCase
     @bayes.train('negative', 'bad work')
     assert_equal(
       'positive',
-      @bayes.classify('very good position for this sentence').category[:name]
+      @bayes.classify('very good position for this sentence').top_score.key
     )
+    @bayes.train('negative', 'work')
     assert_equal(
       'negative',
-      @bayes.classify('bad words').category[:name]
+      @bayes.classify('bad words').top_score.key
     )
   end
 
@@ -176,11 +179,11 @@ class TestBayes < Test::Unit::TestCase
 
     assert_equal(
       'positive',
-      results[0].category[:name]
+      results[0].top_score.key
     )
     assert_equal(
       'negative',
-      results[1].category[:name]
+      results[1].top_score.key
     )
   end
 
@@ -191,9 +194,19 @@ class TestBayes < Test::Unit::TestCase
     bayes1.train('positive', 'good job')
     bayes1.train('negative', 'bad work')
     h1 = bayes1.to_hash
-
     bayes2 = ::OmniCat::Classifiers::Bayes.new(h1)
     assert_equal(h1, bayes2.to_hash)
+  end
+
+  def test_change_strategy
+    c1 = ::OmniCat::Classifier.new(::OmniCat::Classifiers::Bayes.new)
+    c1.add_category 'positive'
+    c1.add_category 'negative'
+    c1.train('positive', 'good job')
+    c1.train('negative', 'bad work')
+    h1 = c1.to_hash
+    c1.strategy = ::OmniCat::Classifiers::Bayes.new
+    assert_equal(h1, c1.to_hash)
   end
 
   def test_classify_with_insufficient_categories

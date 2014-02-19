@@ -33,7 +33,7 @@ module OmniCat
                 "Category with name '#{category_name}' is already exists!"
         else
           increment_category_count
-          @categories[category_name] = ::OmniCat::Classifiers::BayesInternals::Category.new
+          @categories[category_name] = ::OmniCat::Classifiers::BayesInternals::Category.new(name: category_name)
         end
       end
 
@@ -105,25 +105,32 @@ module OmniCat
       #   =>
       def classify(doc_content)
         return unless classifiable?
-        score = -1000000
+        doc = ::OmniCat::Doc.new(content: doc_content)
         result = ::OmniCat::Result.new
         @categories.each do |category_name, category|
-          result.scores[category_name] = doc_probability(category, doc_content)
-          if result.scores[category_name] > score
-            result.category[:name] = category_name
-            score = result.scores[category_name]
-          end
-          result.total_score += result.scores[category_name]
+          result.add_score(
+            Score.new(
+              key: category.name,
+              value: doc_probability(category, doc)
+            )
+          )
         end
-        result.total_score = 1 if result.total_score == 0
-        result.category[:percentage] = (
-          result.scores[result.category[:name]] * 100.0 /
-          result.total_score
-        ).floor
+        auto_train(@categories[result.top_score.key], doc)
+        result.calculate_percentages
         result
       end
 
       private
+        # nodoc
+        def auto_train(category, doc)
+          case ::OmniCat.config.auto_train
+          when :continues
+            train(category.name, doc.content)
+          when :unique
+            train(category.name, doc.content) unless category.docs.has_key?(doc.content_md5)
+          end
+        end
+
         # nodoc
         def update_priors
           @categories.each do |_, category|
@@ -143,36 +150,35 @@ module OmniCat
 
         # nodoc
         def modify_token_counts(category_name, token, count)
-          modify_uniq_token_count(token, count < 0 ? -1 : 1)
+          modify_unique_token_count(token, count < 0 ? -1 : 1)
           @token_count += count
           @categories[category_name].token_count += count
         end
 
         # nodoc
-        def increment_uniq_token_count(token)
-          modify_uniq_token_count(token, 1)
+        def increment_unique_token_count(token)
+          modify_unique_token_count(token, 1)
         end
 
         # nodoc
-        def decrement_uniq_token_count(token)
-          modify_uniq_token_count(token, -1)
+        def decrement_unique_token_count(token)
+          modify_unique_token_count(token, -1)
         end
 
         # nodoc
-        def modify_uniq_token_count(token, uniq_token_addition)
+        def modify_unique_token_count(token, uniq_token_addition)
           @categories.each do |_, category|
              if category.tokens.has_key?(token)
                uniq_token_addition = 0
                break
              end
           end
-          @uniq_token_count += uniq_token_addition
+          @unique_token_count += uniq_token_addition
         end
 
         # nodoc
-        def doc_probability(category, doc_content)
-          score = k_value
-          doc = OmniCat::Doc.new(content: doc_content)
+        def doc_probability(category, doc)
+          score = @k_value
           doc.tokens.each do |token, count|
             score *= token_probability(category, token, count)
           end
@@ -182,11 +188,11 @@ module OmniCat
         # nodoc
         def token_probability(category, token, count)
           if category.tokens[token].to_i == 0
-            k_value / token_count
+            @k_value / (@unique_token_count * count)
           else
             count * (
-              (category.tokens[token].to_i + k_value) /
-              (category.token_count + uniq_token_count)
+              (category.tokens[token].to_i + @k_value) /
+              (category.token_count + @unique_token_count)
             )
           end
         end
@@ -194,10 +200,10 @@ module OmniCat
         # nodoc
         def add_doc(category_name, doc_content)
           doc_key = generate_doc_key(doc_content)
-          if @categories[category_name].docs[doc_key]
-            @categories[category_name].docs[doc_key].increment_count
+          if doc = @categories[category_name].docs[doc_key]
+            doc.increment_count
           else
-            @categories[category_name].docs[doc_key] = OmniCat::Doc.new(content: doc_content)
+            @categories[category_name].docs[doc_key] = ::OmniCat::Doc.new(content: doc_content)
           end
           @categories[category_name].docs[doc_key]
         end
@@ -205,15 +211,13 @@ module OmniCat
         # nodoc
         def remove_doc(category_name, doc_content)
           doc_key = generate_doc_key(doc_content)
-          if doc = @categories[category_name].docs[doc_key]
-            @categories[category_name].docs[doc_key].decrement_count
-            if @categories[category_name].docs[doc_key].count == 0
-              @categories[category_name].docs.delete(doc_key)
-            end
-          else
-            raise StandardError,
+          doc = @categories[category_name].docs[doc_key]
+          unless doc
+            raise StandardError, 
                   "Document is not found in #{category_name} documents!"
           end
+          doc.decrement_count
+          @categories[category_name].docs.delete(doc_key) if doc.count == 0
           doc
         end
 
